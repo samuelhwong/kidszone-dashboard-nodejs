@@ -1,0 +1,131 @@
+# This is the SAM template that represents the architecture of your serverless application
+# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-template-basics.html
+
+# The AWSTemplateFormatVersion identifies the capabilities of the template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/format-version-structure.html
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  kidszone-dashboard-nodejs
+
+# Transform section specifies one or more macros that AWS CloudFormation uses to process your template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-section-structure.html
+Transform:
+- AWS::Serverless-2016-10-31
+
+Globals:
+  Function:
+    Runtime: nodejs14.x
+    MemorySize: 128
+    Timeout: 100
+
+# Resources declares the AWS resources that you want to include in the stack
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
+Resources:
+
+  # S3 bucket for storing connection ids
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: kidszone-dashboard-nodejs-connection-ids
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/connect.handler
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref S3Bucket
+        - S3WritePolicy:
+            BucketName: !Ref S3Bucket
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref S3Bucket
+
+  DisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/disconnect.handler
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref S3Bucket
+        - S3WritePolicy:
+            BucketName: !Ref S3Bucket
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref S3Bucket
+        
+  # API Gateway of type websocket
+  WebsocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: kidszone-dashboard-nodejs
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+
+  # API Gateway integration for ConnectFunction
+  ConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebsocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Join 
+        - ''
+        - - 'arn:'
+          - !Ref 'AWS::Partition'
+          - ':apigateway:'
+          - !Ref 'AWS::Region'
+          - ':lambda:path/2015-03-31/functions/'
+          - !GetAtt 
+            - ConnectFunction
+            - Arn
+          - /invocations
+
+  # API Gateway integration for DisconnectFunction
+  DisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebsocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Join 
+        - ''
+        - - 'arn:'
+          - !Ref 'AWS::Partition'
+          - ':apigateway:'
+          - !Ref 'AWS::Region'
+          - ':lambda:path/2015-03-31/functions/'
+          - !GetAtt 
+            - DisconnectFunction
+            - Arn
+          - /invocations
+
+  # API Gateway connect route to ConnectFunction
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebsocketApi
+      RouteKey: $connect
+      AuthorizationType: NONE
+      OperationName: ConnectRoute
+      Target: !Join
+        - ''
+        - - 'integrations/'
+          - !Ref ConnectIntegration
+
+  # API Gateway disconnect route to DisconnectFunction
+  DisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebsocketApi
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      OperationName: DisconnectRoute
+      Target: !Join
+        - ''
+        - - 'integrations/'
+          - !Ref DisconnectIntegration
+

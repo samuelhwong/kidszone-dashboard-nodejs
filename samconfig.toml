@@ -1,0 +1,11 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "kidszone-dashboard-nodejs"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1cn09cuo3kxhy"
+s3_prefix = "kidszone-dashboard-nodejs"
+region = "ca-central-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+image_repositories = []

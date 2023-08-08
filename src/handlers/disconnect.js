@@ -5,7 +5,7 @@ const s3Client = require('../lib/s3-client');
  * It is responsible for removing the connection id from the list of connection ids
  * stored in S3.
  */
-export const handler = async (event, context) => {
+exports.handler = async (event, context) => {
 
     const log = require('lambda-log');
 
